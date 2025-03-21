@@ -22,7 +22,7 @@
       fetch('/api/method/logout', { method: 'GET' })
       .then(response => {
           alert("Logged out successfully!");
-          window.location.href = "/employee_attendance_login";
+          window.location.href = "/login";
       })
       .catch(error => console.error('Error:', error));
   }
