@@ -172,7 +172,7 @@ async function fetchDetails() {
         const weeklyResponse = await fetch(`/api/method/employee_attendance.api.get_weekly_average?employee_name=${givenEmployee}&current_date=${givenDate}`);
         const weeklyResult = await weeklyResponse.json();
         const weeklyAvg = weeklyResult.message.weekly_avg_hh_mm;
-        console.log("reportWeeklyAvg",weeklyAvg);
+        console.log("WeeklyAvg",weeklyResult);
 
         const monthlyResponse = await fetch(`/api/method/employee_attendance.api.get_monthly_average?employee_name=${givenEmployee}&current_date=${givenDate}`);
         const monthlyResult = await monthlyResponse.json();

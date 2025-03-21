@@ -146,15 +146,16 @@ def get_weekly_average(employee_name, current_date):
     current_date = getdate(current_date)
 
     # Check if today is Sunday; if yes, return 0
-    if current_date.weekday() == 6:  # Sunday (0=Monday, 6=Sunday)
-        return {"error": "Sunday is ignored for weekly average calculation."}
+    # if current_date.weekday() == 6:  # Sunday (0=Monday, 6=Sunday)
+    #     return {"error": "Sunday is ignored for weekly average calculation."}
 
     total_seconds = 0
     valid_days = 0  # Track number of valid weekdays (Mon-Sat)
 
     # Iterate over days from Monday to (Current Day - 1)
     for days_ago in range(1, current_date.weekday() + 1):  
-        past_date = add_days(current_date, -days_ago)  # Get past date
+        past_date = add_days(current_date, -days_ago)
+        # print(f"past_date: {past_date}")  # Get past date
 
         # Query Employee Checkin table for working hours
         query = """
@@ -162,12 +163,13 @@ def get_weekly_average(employee_name, current_date):
             WHERE `employee` = %s
             AND DATE(`time`) = %s
         """
-        checkin_records = frappe.db.sql(query, (employee_name, past_date), as_dict=True)
+        # checkin_records = frappe.db.sql(query, (employee_name, past_date), as_dict=True)
 
         # Fetch attendance data for the day
         attendance = get_attendance(employee_name, str(past_date))
-        if attendance.get("error"):  
-            continue  # Skip if no attendance data
+        print(f"week attendance: {attendance.get('working_hours')}")
+        if attendance.get("error") or attendance["working_hours"] == "0:00:00":
+            continue  # Skip if no attendance data or working hours are 0
 
         working_hours = attendance["working_hours"]
         hours, minutes, seconds = map(int, working_hours.split(":"))
@@ -201,10 +203,12 @@ def get_monthly_average(employee_name, current_date):
     current_date = getdate(current_date)  # Convert string date to datetime object
     
     # Get the first and last date of the previous month
-    first_day_of_prev_month = add_months(current_date.replace(day=1), -1)
+    # first_day_of_prev_month = add_months(current_date.replace(day=1), -1)
+    # print(f"first_day_of_prev_month: {first_day_of_prev_month}")
     first_day_of_current_month = current_date.replace(day=1)
-    # last_day_of_prev_month = first_day_of_current_month - timedelta(days=1)
-    # print(f"last_day_of_prev_month: {last_day_of_prev_month}")
+    # print(f"first_day_of_current_month: {first_day_of_current_month}")
+    first_day_of_next_month = add_months(current_date.replace(day=1), 1)
+    # print(f"first_day_of_next_month: {first_day_of_next_month}")
     
     total_seconds = 0
     valid_days = 0  # Track number of valid working days
@@ -216,7 +220,7 @@ def get_monthly_average(employee_name, current_date):
         WHERE `employee` = %s
         AND `time` BETWEEN %s AND %s
     """
-    valid_dates = frappe.db.sql(query, (employee_name, first_day_of_prev_month, first_day_of_current_month), as_dict=True)
+    valid_dates = frappe.db.sql(query, (employee_name, first_day_of_current_month, first_day_of_next_month), as_dict=True)
     # print(f"Length of valid_dates: {len(valid_dates)}")
 
     for record in valid_dates:
@@ -224,8 +228,9 @@ def get_monthly_average(employee_name, current_date):
         
         # Fetch attendance data for the date
         attendance = get_attendance(employee_name, str(work_date))
+        # print("attendance:", attendance)
         if attendance.get("error"):  
-            print(f"Skipping {work_date} due to error: {attendance.get('error')}")
+            # print(f"Skipping {work_date} due to error: {attendance.get('error')}")
             continue  # Skip if no attendance data
         
         working_hours = attendance["working_hours"]
@@ -258,5 +263,5 @@ def get_monthly_average(employee_name, current_date):
         "monthly_avg_hh_mm_ss": avg_hh_mm_ss,
         "monthly_avg_hh_mm": avg_hh_mm,
         "days_considered": valid_days,
-        "month": formatdate(first_day_of_prev_month, "MMMM YYYY")  # Format as "March 2024"
+        "month": formatdate(first_day_of_current_month, "MMMM YYYY")  # Format as "March 2024"
     }

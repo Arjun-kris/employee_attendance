@@ -242,6 +242,7 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+
 fixtures = [
     "Client Script",
     "Server Script",
@@ -256,14 +257,14 @@ fixtures = [
     "Workflow Action",
     "Workflow Action Master",
     # Additional fields
-    {"dt": "Custom DocPerm"},
-    {"dt": "Role"},
-    {"dt": "Custom Role"},
+    # {"dt": "Custom DocPerm"}, #Disabled it to prevent unwanted code related permissions from other apps
+    # {"dt": "Role"},
+    # {"dt": "Custom Role"},
     {"dt": "Module Def"},
     {"dt": "Translation"},
     {"dt": "Portal Menu Item"},
-    {"dt": "Web Page"},
-    {"dt": "Web Form"},
+    # {"dt": "Web Page"},
+    # {"dt": "Web Form"},
     {"dt": "Notification"},
     # {"dt": "Email Alert"},
     {"dt": "Email Template"},
