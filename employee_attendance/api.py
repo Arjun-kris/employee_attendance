@@ -126,7 +126,7 @@ def get_all_reportees(employee_name, level=1):
     reportees = frappe.db.sql("""
         SELECT `employee`
         FROM `tabEmployee`
-        WHERE `old_parent` = %s
+        WHERE `reports_to` = %s
     """, (employee_name,), as_dict=True)
 
     all_reportees = []
