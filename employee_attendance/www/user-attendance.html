@@ -4,312 +4,354 @@
 
 {% block content %}
 <style>
-    .navbar-light {
+    .navbar-light, .chat-app, footer {
         display: none !important;
     }
-
-    .chat-app {
-        display: none !important;
-    }
-
-    footer {
-        display: none !important;
-    }
-
-    body {
-        background-color: #f8f9fa;
-    }
-
-    .dashboard-container {
-        max-width: 900px;
-        margin: 30px auto;
-        padding: 20px;
-        background: white;
-        border-radius: 10px;
-        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-    }
-
-    .table th,
-    .table td {
-        text-align: center;
-    }
-
-    .form-control,
-    .btn {
-        border-radius: 6px;
-    }
+    
 </style>
 
-<div class="container dashboard-container">
-    <div class="d-flex justify-content-between align-items-center">
-        <h2 class="fw-bold m-0">Employee Details</h2>
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center gap-4">
+        <h4 class="fw-semibold my-4">Employee Details - <span id="name" class="text-primary"></span></h4>
+        <input type="date" id="date" name="date" class="form-control border border-primary w-25">
         <button class="btn btn-danger" onclick="logoutUser()">Logout</button>
     </div>
-    <h4 class="fw-semibold my-4">Name: <span span id="name" name="name" class="text-primary"></span></h4>
-    <label for="date">Date:</label>
-    <input type="date" id="date" name="date" class="form-control w-25 d-inline-block">
 
-    <table class="table table-bordered mt-3">
+    <!-- Main Attendance Table -->
+    <table class="table table-bordered mt-4">
         <thead class="table-dark">
             <tr>
-                <th>Session</th>
-                <th>Check-in</th>
-                <th>Check-out</th>
-                <th>Working Hours</th>
+                <th>Department</th>
+                <th>Team</th>
+                <th>First Check-in</th>
+                <th>Last Check-out</th>
+                <th>Total Working Hours</th>
+                <th>Weekly Average</th>
+                <th>Monthly Average</th>
+                <th></th>
             </tr>
         </thead>
         <tbody id="data"></tbody>
-        <table class="table table-striped  mt-3">
-            <tr>
-                <th>Total Working Hours</th>
-                <th>Weekly Average </th>
-                <th>Monthly Average </th>
-            </tr>
-            <tr>
-                <td><span id="total-working-hours"></span></td>
-                <td><span id="weekly-avg"></span></td>
-                <td><span id="monthly-avg"></span></td>
-            </tr>
-        </table>
     </table>
 
-    <div class="pt-4" id="reports-table">
-        <h5 class="fw-semibold mt-4">Check-In Reports</h5>
-        <div class="d-flex align-items-center justify-content-between">
-            <label for="employee" class="mt-2">Employee Name:</label>
-            <select id="reportee-select" class="form-control w-50">
-                <option value="">-- Select --</option>
-            </select>
-            <input id="report-date" name="report-date" type="date" class="form-control w-25">
-            <button class="btn btn-primary" onclick="fetchSelectedReport()">Submit</button>
+    <!-- Reports Table (Report Hierarchy) -->
+    <div id="report-container">
+        <div class="d-flex justify-content-between align-items-center">
+            <h4 class="fw-semibold my-4">Check-In Reports</h4>
+            <div id="dropdown-container" class="position-relative">
+                <input class="form-control border border-primary dropdown-toggle" id="dropdown-search" type="text" maxlength="50" placeholder="Search Employee..">
+                <ul class="dropdown-menu w-100 p-2 position-absolute" id="dropdown-options" style="display: none;"></ul>
+            </div>
         </div>
-        <div class="mt-2" id="reportNames-data"></div>
+        
+        <table class="table table-bordered">
+            <thead class="table-secondary">
+                <tr>
+                    <th>Employee Name</th>
+                    <th>Reports To</th> 
+                    <th>Department</th>
+                    <th>Team</th>
+                    <th>First Check-in</th>
+                    <th>Last Check-out</th>
+                    <th>Total Working Hours</th>
+                    <th>Weekly Average</th>
+                    <th>Monthly Average</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="reports-data"></tbody>
+        </table>
     </div>
-
+    
 </div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
     document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById("dropdown-search").addEventListener("keyup", filterEmployees);
+        document.getElementById("date").addEventListener("change", fetchDetails);
+
         fetchCurrentDate();
-        fetchDetails()
+        fetchDetails();
+
+        const searchInput = document.getElementById("dropdown-search");
+        const dropdownOptions = document.getElementById("dropdown-options");
+
+        searchInput.addEventListener("keyup", function () {
+            const searchValue = searchInput.value.toLowerCase();
+            const items = dropdownOptions.querySelectorAll("li");
+
+            let hasResults = false;
+            items.forEach(item => {
+                if (item.textContent.toLowerCase().startsWith(searchValue)) {
+                    item.style.display = "";
+                    hasResults = true;
+                } else {
+                    item.style.display = "none";
+                }
+            });
+
+            dropdownOptions.style.display = hasResults ? "block" : "none";
+        });
+
+        searchInput.addEventListener("focus", function () {
+            if (dropdownOptions.children.length > 0) {
+                dropdownOptions.style.display = "block";
+            }
+        });
+
+        document.addEventListener("click", function (event) {
+            if (!searchInput.contains(event.target) && !dropdownOptions.contains(event.target)) {
+                dropdownOptions.style.display = "none";
+            }
+        });
     });
-    
-    document.getElementById("date").addEventListener("change", fetchDetails);
-    
+
+    function filterEmployees() {
+        const searchValue = document.getElementById("dropdown-search").value.trim().toLowerCase();
+
+        if (searchValue !== selectedEmployeeName.toLowerCase()) {
+            selectedEmployeeName = "";  // Reset to allow search input to work
+        }
+
+        const rows = document.querySelectorAll("#reports-data tr");
+
+        rows.forEach(row => {
+            const employeeName = row.cells[0].textContent.trim().toLowerCase();
+
+            if (
+                (searchValue === "" || employeeName.startsWith(searchValue)) &&
+                (selectedEmployeeName === "" || employeeName === selectedEmployeeName.toLowerCase())
+            ) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
+        });
+    }
+
+    let selectedEmployeeName = ""; // Global variable
+
+    function selectEmployee(employee) {
+        selectedEmployeeName = employee; // Store the selected employee globally
+        document.getElementById("dropdown-search").value = employee;
+        document.getElementById("dropdown-options").style.display = "none";
+        filterEmployees();  // Call filtering again after selecting an employee
+    }
+
+    /////////////////////////////////////////////////////////////////////////
     
     async function fetchCurrentDate() {
         try {
-            const dateResponse = await fetch('/api/method/employee_attendance.api.get_date');
-            const dateResult = await dateResponse.json();
-            
-            if (dateResult.message) {
-                document.getElementById("date").value = dateResult.message;
-                document.getElementById("report-date").value = dateResult.message;
+            const response = await fetch('/api/method/employee_attendance.api.get_date');
+            const result = await response.json();
+            if (result.message) {
+                document.getElementById("date").value = result.message;
             }
         } catch (error) {
             console.error("Error fetching date:", error);
         }
     }
-    
+
     async function fetchDetails() {
         try {
-    
             const userResponse = await fetch("/api/method/frappe.auth.get_logged_user");
             const userData = await userResponse.json();
             const userEmail = userData.message;
-            console.log("user",userEmail);
+
             const nameResponse = await fetch(`/api/method/employee_attendance.api.get_user_details?email=${userEmail}`);
             const nameResult = await nameResponse.json();
             const employeeName = nameResult.message.full_name;
-            console.log("user name",employeeName);
-    
-            document.getElementById("name").innerHTML = employeeName;
-    
+            
+            document.getElementById("name").textContent = employeeName;
+
             const givenEmployee = employeeName;
             const givenDate = document.getElementById("date").value;
-    
-            // validation for date
+
+            // Validate date
             const today = new Date().toISOString().split('T')[0];
             if (givenDate > today) {
-                alert("Given date cannot be greater than the present date");
+                alert("Given date cannot be in the future.");
                 window.location.reload();
-            }
-    
-            if (!givenEmployee || !givenDate) {
-                console.error("Missing employee name or date");
-                alert("Unauthorized access.");
-                // window.location.href = "/login";
                 return;
             }
-    
-            console.log("Fetching data for:", givenEmployee, "on", givenDate);
-    
-            const response = await fetch(`/api/method/employee_attendance.api.get_attendance?employee_name=${givenEmployee}&date=${givenDate}`);
+
+            // Fetch main attendance details
+            const response = await fetch(`/api/method/employee_attendance.api.get_main_attendance?employee_name=${givenEmployee}&date=${givenDate}`);
             const result = await response.json();
-    
-            if (!result.message || !result.message.attendance_sessions) {
-                console.error("Invalid data structure", result);
+            const details = result.message;
+            let buttonId;
+            if (details.report_hierarchy == 0) {
+                buttonId = `modal-btn`;
+            } else {
+                buttonId = `modal-btn-${details.employee_name}`;
+            }
+            document.getElementById("data").innerHTML = `
+                <tr>
+                    <td>${details.department || "-"}</td>
+                    <td>${details.custom_team || "-"}</td>
+                    <td>${details.first_checkin || "-"}</td>
+                    <td>${details.last_logout || "-"}</td>
+                    <td>${details.total_working_hours || "0:00:00"}</td>
+                    <td>${details.w_m_average.week_data.weekly_avg_hh_mm || "0.00"}</td>
+                    <td>${details.w_m_average.month_data.monthly_avg_hh_mm || "0.00"}</td>
+                    <td><button class="btn btn-primary" data-employee="${givenEmployee}" id="modal-btn">More</button></td>
+                </tr>
+            `;
+
+            setTimeout(() => {
+                const modalBtn = document.getElementById("modal-btn");
+                if (modalBtn) {
+                    modalBtn.addEventListener("click", function () {
+                        openModal(employeeName, givenDate);
+                    });
+                } else {
+                    console.warn("Modal button not found.");
+                }
+            }, 500);
+
+            if (details.report_hierarchy.report_names && details.report_hierarchy.report_names.length > 0) {
+                document.getElementById("report-container").style.display = "block";
+                populateReportsTable(details.report_hierarchy, givenEmployee, givenDate);
+            } else {
+                document.getElementById("report-container").style.display = "none";
+            }
+
+        } catch (error) {
+            console.error("Error fetching attendance data:", error);
+        }
+    }
+
+
+    function populateReportsTable(reportHierarchy, employeeName, date) {
+        const reportsTable = document.getElementById("reports-data");
+        const dropdownOptions = document.getElementById("dropdown-options");
+
+        reportsTable.innerHTML = "";
+        dropdownOptions.innerHTML = "";
+
+        async function processReportees(reportees, reportsTo) {
+
+            if (!reportees || reportees.length === 0) return;
+            
+            for (const report of reportees) {
+                const reporteeDetails = report.reportee_attendance;  // Now directly from the hierarchy
+                
+                const li = document.createElement("li");
+                li.innerHTML = `<a class="dropdown-item" href="#" onclick="selectEmployee('${report.employee}')">${report.employee}</a>`;
+                
+                dropdownOptions.appendChild(li);
+                const buttonId = `modal-btn-${reporteeDetails.employee_name.replace(/\s+/g, "-")}`;
+                reportsTable.innerHTML += `
+                    <tr>
+                        <td>${reporteeDetails.employee_name || "-"}</td>
+                        <td>${reportsTo || "-"}</td>
+                        <td>${reporteeDetails.department || "-"}</td>
+                        <td>${reporteeDetails.custom_team || "-"}</td>
+                        <td>${reporteeDetails.first_checkin || "-"}</td>
+                        <td>${reporteeDetails.last_logout || "-"}</td>
+                        <td>${reporteeDetails.total_working_hours || "0:00:00"}</td>
+                        <td>${reporteeDetails.w_m_average.week_data.weekly_avg_hh_mm || "0.00"}</td>
+                        <td>${reporteeDetails.w_m_average.month_data.monthly_avg_hh_mm || "0.00"}</td>
+                        <td><button class="btn btn-primary view-report" data-employee="${reporteeDetails.employee_name}" id="${buttonId}">More</button></td>
+                    </tr>
+                `;
+
+                // Attach event listeners to modal buttons
+                document.querySelectorAll(".view-report").forEach(button => {
+                    button.addEventListener("click", function () {
+                        const reporteeName = this.getAttribute("data-employee");
+                        openModal(reporteeName, date);
+                    });
+                });
+
+                if (reporteeDetails.report_hierarchy.report_names && reporteeDetails.report_hierarchy.report_names .length > 0) {
+                    await processReportees(reporteeDetails.report_hierarchy.report_names , report.employee);
+                }
+            }
+            
+        }
+        processReportees(reportHierarchy.report_names, employeeName);
+        
+    }
+
+    function openModal(employeeName, date) {
+        // Remove any existing modal before inserting a new one
+        const existingModal = document.getElementById("attendanceModal");
+        if (existingModal) {
+            existingModal.remove();
+        }
+        var modalHtml = `
+            <div class="modal fade" id="attendanceModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalLabel">Attendance Report - ${employeeName}</h5>
+                        </div>
+                        <div class="modal-body">
+                            <table class="table table-bordered mt-3">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Session</th>
+                                        <th>Check-in</th>
+                                        <th>Check-out</th>
+                                        <th>Working Hours</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="modal-data"></tbody>
+                            </table>
+                        </div>
+                        <div class="modal-footer justify-content-end">
+                            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+
+        // Remove any existing modal to avoid duplication
+        document.querySelectorAll("#attendanceModal").forEach(el => el.remove());
+
+        document.body.insertAdjacentHTML("beforeend", modalHtml);
+        var myModal = new bootstrap.Modal(document.getElementById("attendanceModal"));
+        myModal.show();
+
+        fetchModalData(employeeName, date);
+    }
+
+    async function fetchModalData(employeeName, date) {
+        try {
+            const modalResponse = await fetch(`/api/method/employee_attendance.api.get_attendance?employee_name=${employeeName}&date=${date}`);
+            const modalResult = await modalResponse.json();
+
+            if (!modalResult.message || !modalResult.message.attendance_sessions) {
+                console.error("Invalid data structure", modalResult);
                 return;
             }
-    
-            const attendanceSessions = result.message.attendance_sessions;
-            const totalWorkingHours = result.message.working_hours;
-    
-            document.getElementById("data").innerHTML = "";
-            document.getElementById("reportNames-data").innerHTML = "";
-            document.getElementById("reportee-select").innerHTML = '<option value="">Select Employee</option>';
-    
+
+            const attendanceSessions = modalResult.message.attendance_sessions;
+            const modalTable = document.getElementById("modal-data");
+            modalTable.innerHTML = "";
+
             attendanceSessions.forEach((sessionData, index) => {
                 const sessionKey = Object.keys(sessionData)[0];
                 const session = sessionData[sessionKey];
-    
-                document.getElementById("data").innerHTML += `
+
+                modalTable.innerHTML += `
                     <tr>
                         <td>${index + 1}</td>
                         <td>${session.in_time || "-"}</td>
                         <td>${session.out_time || "-"}</td>
                         <td>${session.working_hours || "0:00:00"}</td>
-                    </tr>`;
+                    </tr>
+                `;
             });
-    
-    
-            const weeklyResponse = await fetch(`/api/method/employee_attendance.api.get_weekly_average?employee_name=${givenEmployee}&current_date=${givenDate}`);
-            const weeklyResult = await weeklyResponse.json();
-            const weeklyAvg = weeklyResult.message.weekly_avg_hh_mm;
-            console.log("WeeklyAvg",weeklyResult);
-    
-            const monthlyResponse = await fetch(`/api/method/employee_attendance.api.get_monthly_average?employee_name=${givenEmployee}&current_date=${givenDate}`);
-            const monthlyResult = await monthlyResponse.json();
-            const monthlyAvg = monthlyResult.message.monthly_avg_hh_mm;
-            console.log("monthly-result",monthlyResult);
-    
-            document.getElementById("total-working-hours").textContent = totalWorkingHours;
-    
-            document.getElementById("weekly-avg").textContent = weeklyAvg || "0.00";
-            document.getElementById("monthly-avg").textContent = monthlyAvg || "0.00";
-    
-            populateReportDropdown(result.message.report_names);
-    
+
         } catch (error) {
-            console.log("Error fetching attendance data:", error);
-                
-        }
-    }
-    
-    function populateReportDropdown(reportNames, level = 0, parent = "reportee-select") {
-        if (!reportNames || reportNames.length === 0) {
-            document.getElementById("reports-table").style.display = "none";
-            return;
-        }
-    
-        document.getElementById("reports-table").style.display = "block";
-    
-        const reporteeSelect = document.getElementById(parent);
-        reportNames.forEach((employee) => {
-            let option = document.createElement("option");
-            option.value = employee.employee;
-            option.textContent = "--".repeat(level) + " " + employee.employee;
-            reporteeSelect.appendChild(option);
-    
-            if (employee.subordinates.length > 0) {
-                populateReportDropdown(employee.subordinates, level + 1, parent);
-            }
-        });
-    }
-    
-    async function fetchSelectedReport() {
-        try {
-            const reportEmployee = document.getElementById("reportee-select").value;
-            const reportDate = document.getElementById("report-date").value;
-    
-            if (!reportEmployee) {
-                document.getElementById("reportNames-data").innerHTML = "";
-                alert("Please select an employee.");
-                return;
-            }
-    
-            // validation for date
-            const today = new Date().toISOString().split('T')[0];
-            if (reportDate > today) {
-                alert("Given date cannot be greater than the present date");
-                window.location.reload();
-            }
-    
-            if (!reportEmployee || !reportDate) {
-                console.error("Missing employee name or date");
-                return;
-            }
-    
-            console.log("Fetching report data for:", reportEmployee, "on", reportDate);
-    
-            const response = await fetch(`/api/method/employee_attendance.api.get_attendance?employee_name=${reportEmployee}&date=${reportDate}`);
-            const reportResult = await response.json();
-            console.log("sub-result",reportResult);
-    
-            const reportWeeklyResponse = await fetch(`/api/method/employee_attendance.api.get_weekly_average?employee_name=${reportEmployee}&current_date=${reportDate}`);
-            const reportWeeklyResult = await reportWeeklyResponse.json();
-            console.log("reportWeekly-result",reportWeeklyResult);
-    
-            const reportMonthlyResponse = await fetch(`/api/method/employee_attendance.api.get_monthly_average?employee_name=${reportEmployee}&current_date=${reportDate}`);
-            const reportMonthlyResult = await reportMonthlyResponse.json();
-            console.log("reportMonthly-result",reportMonthlyResult);
-    
-    
-            if (!reportResult.message || !reportResult.message.attendance_sessions) {
-                document.getElementById("reportNames-data").innerHTML = "<p>No attendance data found.</p>";
-                return;
-            }
-    
-            let sessionRows = reportResult.message.attendance_sessions.map((sessionData, index) => {
-                const sessionKey = Object.keys(sessionData)[0];
-                const session = sessionData[sessionKey];
-                return `
-                    <tr>
-                        <td>${index + 1}</td>
-                        <td>${session.in_time || "-"}</td>
-                        <td>${session.out_time || "-"}</td>
-                        <td>${session.working_hours || "0:00:00"}</td>
-                    </tr>`;
-            }).join("");
-    
-            const reportTotalWorkingHours = reportResult.message.working_hours;
-            console.log("Total Working Hours:", reportTotalWorkingHours);
-    
-            const reportWeeklyAvg = reportWeeklyResult.message.weekly_avg_hh_mm  || "0:00";
-    
-            const reportMonthlyAvg = reportMonthlyResult.message.monthly_avg_hh_mm || "0:00";
-    
-            let avgRows = `
-                <tr>
-                    <td>${reportTotalWorkingHours}</td>
-                    <td>${reportWeeklyAvg}</td>
-                    <td>${reportMonthlyAvg}</td>
-                </tr>`;
-    
-            document.getElementById("reportNames-data").innerHTML = `<h4>${reportEmployee}</h4>
-                <table class="table table-bordered border-3 mt-3">
-                        <thead class="table-dark">
-                            <tr>
-                                <th scope="col">Session</th>
-                                <th scope="col">Check in</th>
-                                <th scope="col">Check out</th>
-                                <th scope="col">Working Hours</th>
-                            </tr>
-                        </thead>
-                        <tbody>${sessionRows}</tbody>
-                </table>
-                <table class="table table-striped  mt-3">
-                    <thead>
-                        <tr>
-                            <th>Total Working Hours</th>
-                            <th>Weekly Average </th>
-                            <th>Monthly Average </th>
-                        </tr>
-                    </thead>
-                    <tbody>${avgRows}</tbody>
-                </table>`;
-    
-        } catch (error) {
-            console.error("Error fetching report data:", error);
+            console.error("Error fetching modal data:", error);
         }
     }
 
@@ -322,5 +364,6 @@
         .catch(error => console.error('Error:', error));
     }
     
-    </script>
+</script>
 {% endblock %}
+
