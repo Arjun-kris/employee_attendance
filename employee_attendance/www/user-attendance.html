@@ -4,17 +4,16 @@
 
 {% block content %}
 <style>
-    .navbar-light, .chat-app, footer {
+    .chat-app, footer {
         display: none !important;
     }
     
 </style>
 
-<div class="container-fluid mt-3">
+<div class="container mt-3">
     <div class="d-flex justify-content-between align-items-center gap-4">
-        <h4 class="fw-semibold my-4">Employee Details - <span id="name" class="text-primary"></span></h4>
+        <h4 class="fw-semibold my-4">Employee Check-In Details - <span id="name" class="text-primary"></span></h4>
         <input type="date" id="date" name="date" class="form-control border border-primary w-25">
-        <button class="btn btn-danger" onclick="logoutUser()">Logout</button>
     </div>
 
     <!-- Main Attendance Table -->
@@ -160,12 +159,20 @@
             const userResponse = await fetch("/api/method/frappe.auth.get_logged_user");
             const userData = await userResponse.json();
             const userEmail = userData.message;
+            console.log("userEmail:", userEmail);
 
             const nameResponse = await fetch(`/api/method/employee_attendance.api.get_user_details?email=${userEmail}`);
             const nameResult = await nameResponse.json();
             const employeeName = nameResult.message.full_name;
+            console.log("employeeName:", employeeName);
+
+            if (userEmail == "Administrator") {
+                document.getElementById("name").textContent = "Administrator";
+            } else {
+                document.getElementById("name").textContent = employeeName;
+            }
             
-            document.getElementById("name").textContent = employeeName;
+            // document.getElementById("name").textContent = employeeName;
 
             const givenEmployee = employeeName;
             const givenDate = document.getElementById("date").value;

@@ -8,10 +8,15 @@ def get_date():
    return today
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_user_details(email=None):
     if not email:
         return {"error": "Email parameter is required."}
+    if email == "Administrator":
+        return {
+            "full_name": "MURALY G",
+            "email": "admin"
+        }
     try:
         user = frappe.get_doc("Employee", {"user_id": email})
         
@@ -25,7 +30,7 @@ def get_user_details(email=None):
         return {"error": str(e)}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_main_attendance(employee_name, date):
     start_datetime = get_datetime(date + " 00:00:00")
     end_datetime = get_datetime(date + " 23:59:59")
@@ -87,7 +92,7 @@ def get_main_attendance(employee_name, date):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_attendance(employee_name, date):
     start_datetime = get_datetime(date + " 00:00:00")
     end_datetime = get_datetime(date + " 23:59:59")
@@ -101,9 +106,6 @@ def get_attendance(employee_name, date):
         ORDER BY `time` ASC
     """
     attendance_records = frappe.db.sql(query, (employee_name, start_datetime, end_datetime), as_dict=True)
-
-    # Get multi-level reportees
-    # report_hierarchy = get_all_reportees(employee_name)
 
     sessions = []
     total_working_seconds = 0
@@ -168,7 +170,6 @@ def get_attendance(employee_name, date):
             }
         })
 
-   
     # Convert total working seconds to hours:minutes:seconds format
     total_hours = int(total_working_seconds // 3600)
     total_minutes = int((total_working_seconds % 3600) // 60)
@@ -180,14 +181,12 @@ def get_attendance(employee_name, date):
     response = {
         "attendance_sessions": sessions,  # Nested session data with labeled sessions
         "working_hours": total_working_hours # Total working hours for the day
-        # "report_names": report_hierarchy # Multi-level reportees
     }
 
     return response
 
-# # ✅ **Recursive Function to Get Multi-Level Reportees**
+# Recursive Function to Get Multi-Level Reportees
 def get_all_reportees_api(employee_name, current_date):
-    # current_date = getdate(current_date)
     reportees = frappe.db.sql("""
         SELECT `employee`
         FROM `tabEmployee`
@@ -198,29 +197,20 @@ def get_all_reportees_api(employee_name, current_date):
     for reportee in reportees:
         reportee_data = {
             "employee": reportee["employee"],
-            # "level": level,  # Track depth level
             "reportee_attendance": get_main_attendance(reportee["employee"], date = current_date),
-            # "subordinates": get_all_reportees_api(reportee["employee"], current_date, level + 1)  # Recursion
         }
         all_reportees.append(reportee_data)
 
     return {"current_date": current_date, "report_names": all_reportees, }
 
-# @frappe.whitelist(allow_guest=True)
 def get_w_m_average(employee_name, current_date):
     week_data = get_weekly_average(employee_name, current_date)
     month_data = get_monthly_average(employee_name, current_date)
     return {"week_data": week_data, "month_data": month_data}
 
-
-# @frappe.whitelist(allow_guest=True)
 def get_weekly_average(employee_name, current_date):
     # Convert string date to datetime object
     current_date = getdate(current_date)
-
-    # Check if today is Sunday; if yes, return 0
-    # if current_date.weekday() == 6:  # Sunday (0=Monday, 6=Sunday)
-    #     return {"error": "Sunday is ignored for weekly average calculation."}
 
     total_seconds = 0
     valid_days = 0  # Track number of valid weekdays (Mon-Sat)
@@ -228,14 +218,6 @@ def get_weekly_average(employee_name, current_date):
     # Iterate over days from Monday to (Current Day - 1)
     for days_ago in range(1, current_date.weekday() + 1):  
         past_date = add_days(current_date, -days_ago)
-
-        # Query Employee Checkin table for working hours
-        # query = """
-        #     SELECT `time` FROM `tabEmployee Checkin`
-        #     WHERE `employee` = %s
-        #     AND DATE(`time`) = %s
-        # """
-        # checkin_records = frappe.db.sql(query, (employee_name, past_date), as_dict=True)
 
         # Fetch attendance data for the day
         attendance = get_attendance(employee_name, str(past_date))
@@ -257,18 +239,15 @@ def get_weekly_average(employee_name, current_date):
     avg_seconds = total_seconds // valid_days  
     avg_hours = avg_seconds // 3600
     avg_minutes = (avg_seconds % 3600) // 60
-    # avg_seconds_remaining = avg_seconds % 60
 
     # Format output
     avg_hh_mm = f"{avg_hours}.{str(avg_minutes).zfill(2)}"
 
     return {
-        # "weekly_avg_hh_mm_ss": avg_hh_mm_ss,  
         "weekly_avg_hh_mm": avg_hh_mm,  
         "days_considered": valid_days
     }
 
-# @frappe.whitelist(allow_guest=True)
 def get_monthly_average(employee_name, current_date):
     current_date = getdate(current_date)  # Convert string date to datetime object
     
@@ -316,10 +295,7 @@ def get_monthly_average(employee_name, current_date):
     # Format output
     avg_hh_mm = f"{avg_hours}.{str(avg_minutes).zfill(2)}"
 
-    
-
     return {
-        # "monthly_avg_hh_mm_ss": avg_hh_mm_ss,
         "monthly_avg_hh_mm": avg_hh_mm,
         "days_considered": valid_days,
         "month": formatdate(first_day_of_current_month, "MMMM YYYY")  # Format as "March 2024"
