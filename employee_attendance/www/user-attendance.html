@@ -159,12 +159,12 @@
             const userResponse = await fetch("/api/method/frappe.auth.get_logged_user");
             const userData = await userResponse.json();
             const userEmail = userData.message;
-            // console.log("userEmail:", userEmail);
+            console.log("userEmail:", userEmail);
 
             const nameResponse = await fetch(`/api/method/employee_attendance.api.get_user_details?email=${userEmail}`);
             const nameResult = await nameResponse.json();
             const employeeName = nameResult.message.full_name;
-            // console.log("employeeName:", employeeName);
+            console.log("employeeName:", employeeName);
 
             if (userEmail === "Administrator" || userEmail === "silerp@softlandindia.co.in") {
                 document.getElementById("name").textContent = "Administrator";
