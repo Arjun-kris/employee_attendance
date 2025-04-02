@@ -186,7 +186,20 @@ def get_attendance(employee_name, date):
     return response
 
 # Recursive Function to Get Multi-Level Reportees
-def get_all_reportees_api(employee_name, current_date):
+def get_all_reportees_api(employee_name, current_date, visited=None):
+    if visited is None:
+        visited = set()
+    
+    # Check if the employee is already in the visited set (Detect circular reference)
+    if employee_name in visited:
+        return {
+            "error": f"Circular reporting detected. '{employee_name}' is involved in a circular hierarchy."
+        }
+
+    # Mark the employee as visited
+    visited.add(employee_name)
+
+    # Fetch reportees from the database
     reportees = frappe.db.sql("""
         SELECT `employee`
         FROM `tabEmployee`
@@ -195,13 +208,28 @@ def get_all_reportees_api(employee_name, current_date):
 
     all_reportees = []
     for reportee in reportees:
+        reportee_name = reportee["employee"]
+        
         reportee_data = {
-            "employee": reportee["employee"],
-            "reportee_attendance": get_main_attendance(reportee["employee"], date = current_date),
+            "employee": reportee_name,
+            "reportee_attendance": get_main_attendance(reportee_name, date=current_date)
         }
+        
+        # Recursively fetch nested reportees, passing the visited set along
+        nested_reportees = get_all_reportees_api(reportee_name, current_date, visited)
+        
+        if isinstance(nested_reportees, dict) and "error" in nested_reportees:
+            reportee_data["error"] = nested_reportees["error"]
+        else:
+            reportee_data["reportees"] = nested_reportees.get("report_names", [])
+        
         all_reportees.append(reportee_data)
 
-    return {"current_date": current_date, "report_names": all_reportees, }
+    # Remove the employee from the visited set after processing
+    visited.remove(employee_name)
+
+    return {"current_date": current_date, "report_names": all_reportees}
+
 
 def get_w_m_average(employee_name, current_date):
     week_data = get_weekly_average(employee_name, current_date)

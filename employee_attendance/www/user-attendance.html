@@ -228,6 +228,7 @@
 
         } catch (error) {
             console.error("Error fetching attendance data:", error);
+            alert(`Error occurred: ${error.message}`);
         }
     }
 
@@ -240,45 +241,47 @@
         dropdownOptions.innerHTML = "";
 
         async function processReportees(reportees, reportsTo) {
-
-            if (!reportees || reportees.length === 0) return;
-            
-            for (const report of reportees) {
-                const reporteeDetails = report.reportee_attendance;  // Now directly from the hierarchy
+            try {
+                if (!reportees || reportees.length === 0) return;
                 
-                const li = document.createElement("li");
-                li.innerHTML = `<a class="dropdown-item" href="#" onclick="selectEmployee('${report.employee}')">${report.employee}</a>`;
-                
-                dropdownOptions.appendChild(li);
-                const buttonId = `modal-btn-${reporteeDetails.employee_name.replace(/\s+/g, "-")}`;
-                reportsTable.innerHTML += `
-                    <tr>
-                        <td>${reporteeDetails.employee_name || "-"}</td>
-                        <td>${reportsTo || "-"}</td>
-                        <td>${reporteeDetails.department || "-"}</td>
-                        <td>${reporteeDetails.custom_team || "-"}</td>
-                        <td>${reporteeDetails.first_checkin || "-"}</td>
-                        <td>${reporteeDetails.last_logout || "-"}</td>
-                        <td>${reporteeDetails.total_working_hours || "0:00:00"}</td>
-                        <td>${reporteeDetails.w_m_average.week_data.weekly_avg_hh_mm || "0.00"}</td>
-                        <td>${reporteeDetails.w_m_average.month_data.monthly_avg_hh_mm || "0.00"}</td>
-                        <td><button class="btn btn-primary view-report" data-employee="${reporteeDetails.employee_name}" id="${buttonId}">More</button></td>
-                    </tr>
-                `;
+                for (const report of reportees) {
+                    const reporteeDetails = report.reportee_attendance;  // Now directly from the hierarchy
+                    
+                    const li = document.createElement("li");
+                    li.innerHTML = `<a class="dropdown-item" href="#" onclick="selectEmployee('${report.employee}')">${report.employee}</a>`;
+                    
+                    dropdownOptions.appendChild(li);
+                    const buttonId = `modal-btn-${reporteeDetails.employee_name.replace(/\s+/g, "-")}`;
+                    reportsTable.innerHTML += `
+                        <tr>
+                            <td>${reporteeDetails.employee_name || "-"}</td>
+                            <td>${reportsTo || "-"}</td>
+                            <td>${reporteeDetails.department || "-"}</td>
+                            <td>${reporteeDetails.custom_team || "-"}</td>
+                            <td>${reporteeDetails.first_checkin || "-"}</td>
+                            <td>${reporteeDetails.last_logout || "-"}</td>
+                            <td>${reporteeDetails.total_working_hours || "0:00:00"}</td>
+                            <td>${reporteeDetails.w_m_average.week_data.weekly_avg_hh_mm || "0.00"}</td>
+                            <td>${reporteeDetails.w_m_average.month_data.monthly_avg_hh_mm || "0.00"}</td>
+                            <td><button class="btn btn-primary view-report" data-employee="${reporteeDetails.employee_name}" id="${buttonId}">More</button></td>
+                        </tr>
+                    `;
 
-                // Attach event listeners to modal buttons
-                document.querySelectorAll(".view-report").forEach(button => {
-                    button.addEventListener("click", function () {
-                        const reporteeName = this.getAttribute("data-employee");
-                        openModal(reporteeName, date);
+                    // Attach event listeners to modal buttons
+                    document.querySelectorAll(".view-report").forEach(button => {
+                        button.addEventListener("click", function () {
+                            const reporteeName = this.getAttribute("data-employee");
+                            openModal(reporteeName, date);
+                        });
                     });
-                });
 
-                if (reporteeDetails.report_hierarchy.report_names && reporteeDetails.report_hierarchy.report_names .length > 0) {
-                    await processReportees(reporteeDetails.report_hierarchy.report_names , report.employee);
+                    if (reporteeDetails.report_hierarchy.report_names && reporteeDetails.report_hierarchy.report_names .length > 0) {
+                        await processReportees(reporteeDetails.report_hierarchy.report_names , report.employee);
+                    }
                 }
+            } catch (error) {
+                console.error("Error processing reportees:", error);
             }
-            
         }
         processReportees(reportHierarchy.report_names, employeeName);
         
