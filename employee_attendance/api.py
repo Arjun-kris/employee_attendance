@@ -12,10 +12,10 @@ def get_date():
 def get_user_details(email=None):
     if not email:
         return {"error": "Email parameter is required."}
-    if email == "Administrator":
+    if email in ["Administrator", "silerp@softlandindia.co.in"]:
         return {
             "full_name": "MURALY G",
-            "email": "admin"
+            "email": "silerp@softlandindia.co.in"
         }
     try:
         user = frappe.get_doc("Employee", {"user_id": email})
