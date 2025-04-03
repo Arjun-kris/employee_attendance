@@ -242,36 +242,43 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
-
 fixtures = [
     "Client Script",
     "Server Script",
-    "Custom Field",
-    "Property Setter",
-    "Print Format",
-    # "DocType",
-    "Report",
-    "Letter Head",
-    "Workflow",
-    "Workflow State",
-    "Workflow Action",
-    "Workflow Action Master",
-    # Additional fields
-    # {"dt": "Custom DocPerm"}, #Disabled it to prevent unwanted code related permissions from other apps
-    # {"dt": "Role"},
-    # {"dt": "Custom Role"},
-    {"dt": "Module Def"},
-    # {"dt": "Translation"},
-    # {"dt": "Portal Menu Item"},
-    # {"dt": "Web Page"},
-    # {"dt": "Web Form"},
-    {"dt": "Notification"},
-    # {"dt": "Email Alert"},
-    {"dt": "Email Template"},
-    #{"dt": "Dashboard"},
-     {"dt": "Dashboard",
-        "filters": [["is_standard", "=", "0"]],
-        "ignore_version": 1},
-    {"dt": "Dashboard Chart"},
-    # {"dt": "User Permission"}
+    # "Custom Field",
+    {"dt": "Module Def"},  # Keep this for your custom module
 ]
+
+
+# fixtures = [
+#     "Client Script",
+#     "Server Script",
+#     "Custom Field",
+#     "Property Setter",
+#     "Print Format",
+#     # "DocType",
+#     "Report",
+#     "Letter Head",
+#     "Workflow",
+#     "Workflow State",
+#     "Workflow Action",
+#     "Workflow Action Master",
+#     # Additional fields
+#     # {"dt": "Custom DocPerm"}, #Disabled it to prevent unwanted code related permissions from other apps
+#     # {"dt": "Role"},
+#     # {"dt": "Custom Role"},
+#     {"dt": "Module Def"},
+#     # {"dt": "Translation"},
+#     # {"dt": "Portal Menu Item"},
+#     # {"dt": "Web Page"},
+#     # {"dt": "Web Form"},
+#     {"dt": "Notification"},
+#     # {"dt": "Email Alert"},
+#     {"dt": "Email Template"},
+#     #{"dt": "Dashboard"},
+#      {"dt": "Dashboard",
+#         "filters": [["is_standard", "=", "0"]],
+#         "ignore_version": 1},
+#     {"dt": "Dashboard Chart"},
+#     # {"dt": "User Permission"}
+# ]

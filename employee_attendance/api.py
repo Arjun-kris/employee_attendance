@@ -25,8 +25,10 @@ def get_user_details(email=None):
             "email": user.user_id
         }
     except frappe.DoesNotExistError:
+        frappe.log_error(frappe.get_traceback(), "User Not Found Error")
         return {"error": "User not found."}
     except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Unexpected Error in get_user_details")
         return {"error": str(e)}
 
 
