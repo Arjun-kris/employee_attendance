@@ -17,21 +17,24 @@
     </div>
 
     <!-- Main Attendance Table -->
-    <table class="table table-bordered mt-4">
-        <thead class="table-dark">
-            <tr>
-                <th>Department</th>
-                <th>Team</th>
-                <th>First Check-in</th>
-                <th>Last Check-out</th>
-                <th>Total Working Hours</th>
-                <th>Weekly Average</th>
-                <th>Monthly Average</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody id="data"></tbody>
-    </table>
+
+    <div class="table-responsive">
+        <table class="table table-bordered mt-4">
+            <thead class="table-dark">
+                <tr>
+                    <th>Department</th>
+                    <th>Team</th>
+                    <th>First Check-in</th>
+                    <th>Last Check-out</th>
+                    <th>Total Working Hours</th>
+                    <th>Weekly Average</th>
+                    <th>Monthly Average</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="data"></tbody>
+        </table>
+    </div>
 
     <!-- Reports Table (Report Hierarchy) -->
     <div id="report-container">
@@ -43,23 +46,25 @@
             </div>
         </div>
         
-        <table class="table table-bordered">
-            <thead class="table-secondary">
-                <tr>
-                    <th>Employee Name</th>
-                    <th>Reports To</th> 
-                    <th>Department</th>
-                    <th>Team</th>
-                    <th>First Check-in</th>
-                    <th>Last Check-out</th>
-                    <th>Total Working Hours</th>
-                    <th>Weekly Average</th>
-                    <th>Monthly Average</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody id="reports-data"></tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="table-secondary">
+                    <tr>
+                        <th>Employee Name</th>
+                        <th>Reports To</th> 
+                        <th>Department</th>
+                        <th>Team</th>
+                        <th>First Check-in</th>
+                        <th>Last Check-out</th>
+                        <th>Total Working Hours</th>
+                        <th>Weekly Average</th>
+                        <th>Monthly Average</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="reports-data"></tbody>
+            </table>
+        </div>
     </div>
     
 </div>
