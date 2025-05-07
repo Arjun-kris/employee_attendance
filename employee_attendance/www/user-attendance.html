@@ -8,6 +8,44 @@
         display: none !important;
     }
     
+    /* Spinner Styles */
+    .loading-spinner {
+        display: inline-block;
+        width: 2rem;
+        height: 2rem;
+        border: 0.25rem solid rgba(0, 123, 255, 0.25);
+        border-right-color: #0d6efd;
+        border-radius: 50%;
+        animation: spinner-border 0.75s linear infinite;
+    }
+    
+    .spinner-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 200px;
+    }
+    
+    @keyframes spinner-border {
+        to { transform: rotate(360deg); }
+    }
+    
+    .table-overlay {
+        position: relative;
+    }
+    
+    .table-overlay.loading::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
 </style>
 
 <div class="container mt-3">
@@ -17,56 +55,85 @@
     </div>
 
     <!-- Main Attendance Table -->
-
-    <div class="table-responsive">
-        <table class="table table-bordered mt-4">
-            <thead class="table-dark">
-                <tr>
-                    <th>Department</th>
-                    <th>Team</th>
-                    <th>First Check-in</th>
-                    <th>Last Check-out</th>
-                    <th>Total Working Hours</th>
-                    <th>Weekly Average</th>
-                    <th>Monthly Average</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody id="data"></tbody>
-        </table>
+    <div id="main-table-container" class="table-overlay">
+        <div class="table-responsive">
+            <table class="table table-bordered mt-4">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="vertical-align: top;">Department</th>
+                        <th style="vertical-align: top;">Team</th>
+                        <th style="vertical-align: top;">First CheckIn</th>
+                        <th style="vertical-align: top;">Last CheckOut</th>
+                        <th style="vertical-align: top;">Total Working Hours</th>
+                        <th style="vertical-align: top;">Weekly Average</th>
+                        <th style="vertical-align: top;">Monthly Average</th>
+                        <th style="vertical-align: top;"></th>
+                    </tr>
+                </thead>
+                
+                <tbody id="data"></tbody>
+            </table>
+        </div>
+        <div id="main-spinner" class="spinner-container">
+            <div class="loading-spinner"></div>
+        </div>
     </div>
 
     <!-- Reports Table (Report Hierarchy) -->
     <div id="report-container">
         <div class="d-flex justify-content-between align-items-center">
-            <h4 class="fw-semibold my-4">Check-In Reports</h4>
+            <h4 class="fw-semibold my-4">CheckIn Reports</h4>
             <div id="dropdown-container" class="position-relative">
                 <input class="form-control border border-primary dropdown-toggle" id="dropdown-search" type="text" maxlength="50" placeholder="Search Employee..">
                 <ul class="dropdown-menu w-100 p-2 position-absolute" id="dropdown-options" style="display: none;"></ul>
             </div>
         </div>
         
-        <div class="table-responsive">
-            <table class="table table-bordered">
-                <thead class="table-secondary">
-                    <tr>
-                        <th>Employee Name</th>
-                        <th>Reports To</th> 
-                        <th>Department</th>
-                        <th>Team</th>
-                        <th>First Check-in</th>
-                        <th>Last Check-out</th>
-                        <th>Total Working Hours</th>
-                        <th>Weekly Average</th>
-                        <th>Monthly Average</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="reports-data"></tbody>
-            </table>
+        <div id="reports-table-container" class="table-overlay">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th style="vertical-align: top;">Employee Name</th>
+                            <th style="vertical-align: top;">Reports To</th> 
+                            <th style="vertical-align: top;">Department</th>
+                            <th style="vertical-align: top;">Team</th>
+                            <th style="vertical-align: top;">
+                                First CheckIn
+                                <div>
+                                    <a class="btn btn-sm btn-transparent" style="margin-bottom: 3px; font-size: small;" onclick="sortTable('reports-data', 4, 'asc')">↑</a>
+                                    <a class="btn btn-sm btn-transparent" onclick="sortTable('reports-data', 4, 'desc')">↓</a>
+                                </div>
+                            </th>
+                            <th style="vertical-align: top;">
+                                Last CheckOut
+                                <div>
+                                    <a class="btn btn-sm btn-transparent" style="margin-bottom: 3px; font-size: small;" onclick="sortTable('reports-data', 5, 'asc')">↑</a>
+                                    <a class="btn btn-sm btn-transparent" onclick="sortTable('reports-data', 5, 'desc')">↓</a>
+                                </div>
+                            </th>
+                            <th style="vertical-align: top;">Total Working Hours</th>
+                            <th style="vertical-align: top;">Weekly Average</th>
+                            <th style="vertical-align: top;">Monthly Average</th>
+                            <th style="vertical-align: top;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="reports-data"></tbody>
+                </table>
+            </div>
+            <div id="reports-spinner" class="spinner-container">
+                <div class="loading-spinner"></div>
+            </div>
         </div>
     </div>
     
+</div>
+
+<!-- Modal Loading Spinner Template -->
+<div id="modalSpinnerTemplate" style="display: none;">
+    <div class="spinner-container py-5">
+        <div class="loading-spinner"></div>
+    </div>
 </div>
 
 <!-- Bootstrap JS -->
@@ -74,8 +141,14 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {
+        // Reset search on initial load
+        resetSearch();
+
         document.getElementById("dropdown-search").addEventListener("keyup", filterEmployees);
-        document.getElementById("date").addEventListener("change", fetchDetails);
+        document.getElementById("date").addEventListener("change", function() {
+            resetSearch();
+            fetchDetails();
+        });
 
         fetchCurrentDate();
         fetchDetails();
@@ -84,12 +157,36 @@
         const dropdownOptions = document.getElementById("dropdown-options");
 
         searchInput.addEventListener("keyup", function () {
-            const searchValue = searchInput.value.toLowerCase();
+            const searchValue = searchInput.value.trim().toLowerCase();
+            const searchTokens = searchValue.split(/\s+/);
             const items = dropdownOptions.querySelectorAll("li");
 
             let hasResults = false;
+
             items.forEach(item => {
-                if (item.textContent.toLowerCase().startsWith(searchValue)) {
+                const itemText = item.textContent.trim().toLowerCase();
+                const nameWords = itemText.split(/\s+/);
+
+                let match = true;
+                let nameIndex = 0;
+
+                for (let token of searchTokens) {
+                    let found = false;
+                    while (nameIndex < nameWords.length) {
+                        if (nameWords[nameIndex].startsWith(token)) {
+                            found = true;
+                            nameIndex++; // Move forward for next token
+                            break;
+                        }
+                        nameIndex++;
+                    }
+                    if (!found) {
+                        match = false;
+                        break;
+                    }
+                }
+
+                if (searchValue === "" || match) {
                     item.style.display = "";
                     hasResults = true;
                 } else {
@@ -113,28 +210,84 @@
         });
     });
 
+    function sortTable(tbodyId, columnIndex, order) {
+        const tbody = document.getElementById(tbodyId);
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+
+        rows.sort((a, b) => {
+            let valA = a.cells[columnIndex].textContent.trim();
+            let valB = b.cells[columnIndex].textContent.trim();
+
+            // Handle empty fields
+            if (!valA) valA = "00:00:00";
+            if (!valB) valB = "00:00:00";
+
+            // Parse time (like "08:30:00") into seconds
+            const timeToSeconds = (timeStr) => {
+                const parts = timeStr.split(":").map(Number);
+                return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+            };
+
+            const secondsA = timeToSeconds(valA);
+            const secondsB = timeToSeconds(valB);
+
+            if (secondsA === 0) {
+                return 1;
+            } else if (secondsB === 0) {
+                return -1;
+            } else if (order === "asc") {
+                return secondsA - secondsB;
+            } else {
+                return secondsB - secondsA;
+            }
+        });
+
+        // Re-attach rows in new order
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
     function filterEmployees() {
         const searchValue = document.getElementById("dropdown-search").value.trim().toLowerCase();
+        const searchTokens = searchValue.split(/\s+/); // Split input into tokens
 
         if (searchValue !== selectedEmployeeName.toLowerCase()) {
-            selectedEmployeeName = "";  // Reset to allow search input to work
+            selectedEmployeeName = ""; // Reset selection
         }
 
         const rows = document.querySelectorAll("#reports-data tr");
 
         rows.forEach(row => {
             const employeeName = row.cells[0].textContent.trim().toLowerCase();
+            const nameWords = employeeName.split(/\s+/);
 
-            if (
-                (searchValue === "" || employeeName.startsWith(searchValue)) &&
-                (selectedEmployeeName === "" || employeeName === selectedEmployeeName.toLowerCase())
-            ) {
+            let match = true;
+            let nameIndex = 0;
+
+            for (let token of searchTokens) {
+                let found = false;
+                while (nameIndex < nameWords.length) {
+                    if (nameWords[nameIndex].startsWith(token)) {
+                        found = true;
+                        nameIndex++; // move to next word
+                        break;
+                    }
+                    nameIndex++;
+                }
+                if (!found) {
+                    match = false;
+                    break;
+                }
+            }
+
+            if ((searchValue === "" || match) &&
+                (selectedEmployeeName === "" || employeeName === selectedEmployeeName.toLowerCase())) {
                 row.style.display = "";
             } else {
                 row.style.display = "none";
             }
         });
     }
+
 
     let selectedEmployeeName = ""; // Global variable
 
@@ -145,8 +298,26 @@
         filterEmployees();  // Call filtering again after selecting an employee
     }
 
+    // Show/hide spinner functions
+    function showSpinner(containerId) {
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.classList.add("loading");
+            container.querySelector(".spinner-container").style.display = "flex";
+            document.getElementById("dropdown-container").style.display = "none";
+        }
+    }
+
+    function hideSpinner(containerId) {
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.classList.remove("loading");
+            container.querySelector(".spinner-container").style.display = "none";
+            document.getElementById("dropdown-container").style.display = "flex";
+        }
+    }
+
     // To get Date
-    
     async function fetchCurrentDate() {
         try {
             const response = await fetch('/api/method/employee_attendance.api.get_date');
@@ -160,6 +331,10 @@
     }
 
     async function fetchDetails() {
+        // Show spinners while data is loading
+        showSpinner("main-table-container");
+        showSpinner("reports-table-container");
+        
         try {
             const userResponse = await fetch("/api/method/frappe.auth.get_logged_user");
             const userData = await userResponse.json();
@@ -168,7 +343,7 @@
 
             const nameResponse = await fetch(`/api/method/employee_attendance.api.get_user_details?email=${userEmail}`);
             const nameResult = await nameResponse.json();
-            const employeeName = nameResult.message.full_name;
+            const employeeName = nameResult.message?.full_name || "";
             console.log("employeeName:", employeeName);
 
             if (userEmail === "Administrator" || userEmail === "silerp@softlandindia.co.in") {
@@ -177,15 +352,13 @@
                 document.getElementById("name").textContent = employeeName;
             }
             
-            // document.getElementById("name").textContent = employeeName;
-
             const givenEmployee = employeeName;
             const givenDate = document.getElementById("date").value;
 
             // Validate date
             const today = new Date().toISOString().split('T')[0];
             if (givenDate > today) {
-                alert("Given date cannot be in the future.");
+                alert("Given date is Invalid.");
                 window.location.reload();
                 return;
             }
@@ -200,6 +373,10 @@
             } else {
                 buttonId = `modal-btn-${details.employee_name}`;
             }
+            
+            // Hide spinner once data is loaded
+            hideSpinner("main-table-container");
+            
             document.getElementById("data").innerHTML = `
                 <tr>
                     <td>${details.department || "-"}</td>
@@ -226,19 +403,25 @@
 
             if (details.report_hierarchy.report_names && details.report_hierarchy.report_names.length > 0) {
                 document.getElementById("report-container").style.display = "block";
-                populateReportsTable(details.report_hierarchy, givenEmployee, givenDate);
+                await populateReportsTable(details.report_hierarchy, givenEmployee, givenDate);
             } else {
                 document.getElementById("report-container").style.display = "none";
             }
+            
+            // Hide reports spinner after all data is processed
+            hideSpinner("reports-table-container");
 
         } catch (error) {
             console.error("Error fetching attendance data:", error);
             alert(`Error occurred: ${error.message}`);
+            
+            // Hide spinners on error
+            hideSpinner("main-table-container");
+            hideSpinner("reports-table-container");
         }
     }
 
-
-    function populateReportsTable(reportHierarchy, employeeName, date) {
+    async function populateReportsTable(reportHierarchy, employeeName, date) {
         const reportsTable = document.getElementById("reports-data");
         const dropdownOptions = document.getElementById("dropdown-options");
 
@@ -253,14 +436,14 @@
                     const reporteeDetails = report.reportee_attendance;  // Now directly from the hierarchy
                     
                     const li = document.createElement("li");
-                    li.innerHTML = `<a class="dropdown-item" href="#" onclick="selectEmployee('${report.employee}')">${report.employee}</a>`;
+                    li.innerHTML = `<a class="dropdown-item text-uppercase" href="#" onclick="selectEmployee('${report.employee}')">${report.employee}</a>`;
                     
                     dropdownOptions.appendChild(li);
                     const buttonId = `modal-btn-${reporteeDetails.employee_name.replace(/\s+/g, "-")}`;
                     reportsTable.innerHTML += `
                         <tr>
-                            <td>${reporteeDetails.employee_name || "-"}</td>
-                            <td>${reportsTo || "-"}</td>
+                            <td class="font-weight-bold text-uppercase">${reporteeDetails.employee_name || "-"}</td>
+                            <td class="text-uppercase">${reportsTo || "-"}</td>
                             <td>${reporteeDetails.department || "-"}</td>
                             <td>${reporteeDetails.custom_team || "-"}</td>
                             <td>${reporteeDetails.first_checkin || "-"}</td>
@@ -280,16 +463,15 @@
                         });
                     });
 
-                    if (reporteeDetails.report_hierarchy.report_names && reporteeDetails.report_hierarchy.report_names .length > 0) {
-                        await processReportees(reporteeDetails.report_hierarchy.report_names , report.employee);
+                    if (reporteeDetails.report_hierarchy.report_names && reporteeDetails.report_hierarchy.report_names.length > 0) {
+                        await processReportees(reporteeDetails.report_hierarchy.report_names, report.employee);
                     }
                 }
             } catch (error) {
                 console.error("Error processing reportees:", error);
             }
         }
-        processReportees(reportHierarchy.report_names, employeeName);
-        
+        await processReportees(reportHierarchy.report_names, employeeName);
     }
 
     function openModal(employeeName, date) {
@@ -306,6 +488,9 @@
                             <h5 class="modal-title" id="modalLabel">Attendance Report - ${employeeName}</h5>
                         </div>
                         <div class="modal-body">
+                            <div id="modal-spinner" class="spinner-container">
+                                <div class="loading-spinner"></div>
+                            </div>
                             <table class="table table-bordered mt-3">
                                 <thead class="table-dark">
                                     <tr>
@@ -326,7 +511,6 @@
             </div>
         `;
         
-
         // Remove any existing modal to avoid duplication
         document.querySelectorAll("#attendanceModal").forEach(el => el.remove());
 
@@ -339,8 +523,14 @@
 
     async function fetchModalData(employeeName, date) {
         try {
+            // Show modal loading spinner
+            document.getElementById("modal-spinner").style.display = "flex";
+            
             const modalResponse = await fetch(`/api/method/employee_attendance.api.get_attendance?employee_name=${employeeName}&date=${date}`);
             const modalResult = await modalResponse.json();
+
+            // Hide modal loading spinner
+            document.getElementById("modal-spinner").style.display = "none";
 
             if (!modalResult.message || !modalResult.message.attendance_sessions) {
                 console.error("Invalid data structure", modalResult);
@@ -367,18 +557,15 @@
 
         } catch (error) {
             console.error("Error fetching modal data:", error);
+            // Hide modal loading spinner on error
+            document.getElementById("modal-spinner").style.display = "none";
         }
     }
 
-    function logoutUser() {
-        fetch('/api/method/logout', { method: 'GET' })
-        .then(response => {
-            alert("Logged out successfully!");
-            window.location.href = "/login";
-        })
-        .catch(error => console.error('Error:', error));
+    function resetSearch() {
+        selectedEmployeeName = "";
+        document.getElementById("dropdown-search").value = "";
+        filterEmployees(); // Reset filtering
     }
-    
 </script>
 {% endblock %}
-
