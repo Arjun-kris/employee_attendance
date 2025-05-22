@@ -46,6 +46,35 @@
         justify-content: center;
         align-items: center;
     }
+    
+    .filter-dropdown {
+        position: relative;
+        margin-right: 10px;
+    }
+    
+    .filter-dropdown .dropdown-menu {
+        max-height: 250px;
+        overflow-y: auto;
+    }
+    
+    .filters-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+    
+    @media (max-width: 768px) {
+        .filters-container {
+            flex-direction: column;
+        }
+        
+        .filter-dropdown {
+            width: 100%;
+            margin-right: 0;
+            margin-bottom: 10px;
+        }
+    }
 </style>
 
 <div class="container mt-3">
@@ -83,10 +112,30 @@
     <div id="report-container">
         <div class="d-flex justify-content-between align-items-center">
             <h4 class="fw-semibold my-4">CheckIn Reports</h4>
+        </div>
+        
+        <!-- Filter Dropdowns -->
+        <div id="dropdown-container" class="filters-container mb-3">
+            <div class="filter-dropdown">
+                <select class="form-control form-select border border-primary" id="department-filter">
+                    <option value="">All Departments</option>
+                </select>
+            </div>
+            <div class="filter-dropdown">
+                <select class="form-control form-select border border-primary" id="team-filter">
+                    <option value="">All Teams</option>
+                </select>
+            </div>
+            <div class="filter-dropdown">
+                <select class="form-control form-select border border-primary" id="reports-to-filter">
+                    <option value="">Reports to</option>
+                </select>
+            </div>
             <div id="dropdown-container" class="position-relative">
                 <input class="form-control border border-primary dropdown-toggle" id="dropdown-search" type="text" maxlength="50" placeholder="Search Employee..">
-                <ul class="dropdown-menu w-100 p-2 position-absolute" id="dropdown-options" style="display: none;"></ul>
+                <ul class="dropdown-menu p-2 position-absolute" id="dropdown-options" style="display: none;"></ul>
             </div>
+            <button class="btn btn-outline-primary" id="reset-filters">Reset Filters</button>
         </div>
         
         <div id="reports-table-container" class="table-overlay">
@@ -112,9 +161,27 @@
                                     <a class="btn btn-sm btn-transparent" onclick="sortTable('reports-data', 5, 'desc')">↓</a>
                                 </div>
                             </th>
-                            <th style="vertical-align: top;">Total Working Hours</th>
-                            <th style="vertical-align: top;">Weekly Average</th>
-                            <th style="vertical-align: top;">Monthly Average</th>
+                            <th style="vertical-align: top;">
+                                Total Working Hours
+                                <div>
+                                    <a class="btn btn-sm btn-transparent" style="margin-bottom: 3px; font-size: small;" onclick="sortTable('reports-data', 6, 'asc')">↑</a>
+                                    <a class="btn btn-sm btn-transparent" onclick="sortTable('reports-data', 6, 'desc')">↓</a>
+                                </div>
+                            </th>
+                            <th style="vertical-align: top;">
+                                Weekly Average
+                                <div>
+                                    <a class="btn btn-sm btn-transparent" style="margin-bottom: 3px; font-size: small;" onclick="sortTable('reports-data', 7, 'asc')">↑</a>
+                                    <a class="btn btn-sm btn-transparent" onclick="sortTable('reports-data', 7, 'desc')">↓</a>
+                                </div>
+                            </th>
+                            <th style="vertical-align: top;">
+                                Monthly Average
+                                <div>
+                                    <a class="btn btn-sm btn-transparent" style="margin-bottom: 3px; font-size: small;" onclick="sortTable('reports-data', 8, 'asc')">↑</a>
+                                    <a class="btn btn-sm btn-transparent" onclick="sortTable('reports-data', 8, 'desc')">↓</a>
+                                </div>
+                            </th>
                             <th style="vertical-align: top;"></th>
                         </tr>
                     </thead>
@@ -149,6 +216,22 @@
             resetSearch();
             fetchDetails();
         });
+
+        // Add event listeners for the new filters
+        document.getElementById("department-filter").addEventListener("change", function() {
+            updateRelatedFilters();
+            resetSearch();
+            applyFilters();
+        });
+        document.getElementById("team-filter").addEventListener("change", function() {
+            updateRelatedFilters('team');
+            applyFilters();
+        });
+        document.getElementById("reports-to-filter").addEventListener("change", function() {
+            updateRelatedFilters('manager');
+            applyFilters();
+        });
+        document.getElementById("reset-filters").addEventListener("click", resetAllFilters);
 
         fetchCurrentDate();
         fetchDetails();
@@ -254,13 +337,162 @@
             selectedEmployeeName = ""; // Reset selection
         }
 
+        // Apply all filters together
+        applyFilters();
+    }
+
+    // Global variables to track filter states
+    let selectedEmployeeName = "";
+    let departments = new Set();
+    let teams = new Set();
+    let managers = new Set();
+    
+    // Store all employee data for filtering
+    let allEmployeeData = [];
+
+    function selectEmployee(employee) {
+        selectedEmployeeName = employee; // Store the selected employee globally
+        document.getElementById("dropdown-search").value = employee;
+        document.getElementById("dropdown-options").style.display = "none";
+        applyFilters();  // Apply all filters together
+    }
+
+    // New function to update related filters based on current selection
+    function updateRelatedFilters(sourceFilter) {
+        const departmentFilter = document.getElementById("department-filter").value;
+        const teamFilter = document.getElementById("team-filter").value;
+        const reportsToFilter = document.getElementById("reports-to-filter").value;
+        
+        // Create filtered sets based on current selection
+        const filteredTeams = new Set();
+        const filteredManagers = new Set();
+        
+        // Get all visible rows to determine available filter options
+        const rows = document.querySelectorAll("#reports-data tr");
+        
+        rows.forEach(row => {
+            const department = row.cells[2].textContent.trim();
+            const team = row.cells[3].textContent.trim();
+            const reportsTo = row.cells[1].textContent.trim();
+            
+            // Apply current filter logic to determine which options should be available
+            let matchesDepartment = true;
+            
+            if (departmentFilter && department !== departmentFilter) {
+                matchesDepartment = false;
+            }
+            
+            // For team dropdown, consider department filter
+            if (sourceFilter !== 'team' && matchesDepartment && team && team !== "-") {
+                filteredTeams.add(team);
+            }
+            
+            // For manager dropdown, consider department and team filters
+            let matchesTeam = true;
+            if (teamFilter && team !== teamFilter) {
+                matchesTeam = false;
+            }
+            
+            if (sourceFilter !== 'manager' && matchesDepartment && matchesTeam && reportsTo && reportsTo !== "-") {
+                filteredManagers.add(reportsTo);
+            }
+        });
+        
+        // Populate team dropdown if necessary - PRESERVE CURRENT SELECTION
+        if (sourceFilter !== 'team') {
+            const teamDropdown = document.getElementById("team-filter");
+            const currentTeamSelection = teamDropdown.value;
+            
+            // Save current selection
+            teamDropdown.innerHTML = '<option value="">All Teams</option>';
+            
+            const sortedTeams = Array.from(filteredTeams).sort();
+            
+            sortedTeams.forEach(team => {
+                const option = document.createElement("option");
+                option.value = team;
+                option.textContent = team;
+                if (team === currentTeamSelection) {
+                    option.selected = true;
+                }
+                teamDropdown.appendChild(option);
+            });
+        }
+        
+        // Populate manager dropdown if necessary - PRESERVE CURRENT SELECTION
+        if (sourceFilter !== 'manager') {
+            const reportsToDropdown = document.getElementById("reports-to-filter");
+            const currentManagerSelection = reportsToDropdown.value;
+            
+            // Save current selection
+            reportsToDropdown.innerHTML = '<option value="">All Managers</option>';
+            
+            const sortedManagers = Array.from(filteredManagers).sort();
+            
+            sortedManagers.forEach(manager => {
+                const option = document.createElement("option");
+                option.value = manager;
+                option.textContent = manager;
+                if (manager === currentManagerSelection) {
+                    option.selected = true;
+                }
+                reportsToDropdown.appendChild(option);
+            });
+        }
+        
+        // Update employee search dropdown options according to filters
+        updateEmployeeDropdown();
+    }
+
+    // New function to update employee dropdown based on active filters
+    function updateEmployeeDropdown() {
+        const departmentFilter = document.getElementById("department-filter").value;
+        const teamFilter = document.getElementById("team-filter").value;
+        const reportsToFilter = document.getElementById("reports-to-filter").value;
+        
+        const dropdownOptions = document.getElementById("dropdown-options");
+        dropdownOptions.innerHTML = ""; // Clear current options
+        
+        // Get all rows to extract employee information
+        const rows = document.querySelectorAll("#reports-data tr");
+        
+        rows.forEach(row => {
+            const employeeName = row.cells[0].textContent.trim();
+            const reportsTo = row.cells[1].textContent.trim();
+            const department = row.cells[2].textContent.trim();
+            const team = row.cells[3].textContent.trim();
+            
+            // Apply all filters
+            const matchesDepartment = departmentFilter === "" || department === departmentFilter;
+            const matchesTeam = teamFilter === "" || team === teamFilter;
+            const matchesReportsTo = reportsToFilter === "" || reportsTo === reportsToFilter;
+            
+            if (matchesDepartment && matchesTeam && matchesReportsTo) {
+                const li = document.createElement("li");
+                li.innerHTML = `<a class="dropdown-item text-uppercase" href="#" onclick="selectEmployee('${employeeName}')">${employeeName}</a>`;
+                dropdownOptions.appendChild(li);
+            }
+        });
+    }
+
+    function applyFilters() {
+        const searchValue = document.getElementById("dropdown-search").value.trim().toLowerCase();
+        const searchTokens = searchValue.split(/\s+/);
+        const departmentFilter = document.getElementById("department-filter").value;
+        const teamFilter = document.getElementById("team-filter").value;
+        const reportsToFilter = document.getElementById("reports-to-filter").value; 
+        
         const rows = document.querySelectorAll("#reports-data tr");
 
         rows.forEach(row => {
             const employeeName = row.cells[0].textContent.trim().toLowerCase();
+            const reportsTo = row.cells[1].textContent.trim();
+            const department = row.cells[2].textContent.trim();
+            const team = row.cells[3].textContent.trim();
+            
+            // Employee name filter logic (unchanged from original)
             const nameWords = employeeName.split(/\s+/);
-
-            let match = true;
+            let nameMatch = true;
             let nameIndex = 0;
 
             for (let token of searchTokens) {
@@ -274,13 +506,19 @@
                     nameIndex++;
                 }
                 if (!found) {
-                    match = false;
+                    nameMatch = false;
                     break;
                 }
             }
-
-            if ((searchValue === "" || match) &&
-                (selectedEmployeeName === "" || employeeName === selectedEmployeeName.toLowerCase())) {
+            
+            // Apply all filters together
+            const matchesNameFilter = (searchValue === "" || nameMatch) &&
+                (selectedEmployeeName === "" || employeeName === selectedEmployeeName.toLowerCase());
+            const matchesDepartment = departmentFilter === "" || department === departmentFilter;
+            const matchesTeam = teamFilter === "" || team === teamFilter;
+            const matchesReportsTo = reportsToFilter === "" || reportsTo === reportsToFilter;
+            
+            if (matchesNameFilter && matchesDepartment && matchesTeam && matchesReportsTo) {
                 row.style.display = "";
             } else {
                 row.style.display = "none";
@@ -288,14 +526,21 @@
         });
     }
 
-
-    let selectedEmployeeName = ""; // Global variable
-
-    function selectEmployee(employee) {
-        selectedEmployeeName = employee; // Store the selected employee globally
-        document.getElementById("dropdown-search").value = employee;
-        document.getElementById("dropdown-options").style.display = "none";
-        filterEmployees();  // Call filtering again after selecting an employee
+    function resetAllFilters() {
+        // Reset all filter elements
+        document.getElementById("dropdown-search").value = "";
+        document.getElementById("department-filter").value = "";
+        document.getElementById("team-filter").value = "";
+        document.getElementById("reports-to-filter").value = "";
+        
+        // Reset our tracking variable
+        selectedEmployeeName = "";
+        
+        // Repopulate the dropdowns with all available options
+        populateFilterDropdowns();
+        
+        // Apply the reset (show all rows)
+        applyFilters();
     }
 
     // Show/hide spinner functions
@@ -334,6 +579,17 @@
         // Show spinners while data is loading
         showSpinner("main-table-container");
         showSpinner("reports-table-container");
+        
+        // Clear filter dropdown contents
+        document.getElementById("department-filter").innerHTML = '<option value="">All Departments</option>';
+        document.getElementById("team-filter").innerHTML = '<option value="">All Teams</option>';
+        document.getElementById("reports-to-filter").innerHTML = '<option value="">All Managers</option>';
+        
+        // Reset our filter sets
+        departments = new Set();
+        teams = new Set();
+        managers = new Set();
+        allEmployeeData = [];
         
         try {
             const userResponse = await fetch("/api/method/frappe.auth.get_logged_user");
@@ -384,8 +640,8 @@
                     <td>${details.first_checkin || "-"}</td>
                     <td>${details.last_logout || "-"}</td>
                     <td>${details.total_working_hours || "0:00:00"}</td>
-                    <td>${details.w_m_average.week_data.weekly_avg_hh_mm || "0.00"}</td>
-                    <td>${details.w_m_average.month_data.monthly_avg_hh_mm || "0.00"}</td>
+                    <td>${details.w_m_average.week_data.weekly_avg_hh_mm || "0.00"} <span style="font-size: 12px;">(out of ${details.w_m_average.week_data.days_considered || "0"} days)</span></td>
+                    <td>${details.w_m_average.month_data.monthly_avg_hh_mm || "0.00"} <span style="font-size: 12px;">(out of ${details.w_m_average.month_data.days_considered || "0"} days)</span></td>
                     <td><button class="btn btn-primary" data-employee="${givenEmployee}" id="modal-btn">More</button></td>
                 </tr>
             `;
@@ -404,6 +660,9 @@
             if (details.report_hierarchy.report_names && details.report_hierarchy.report_names.length > 0) {
                 document.getElementById("report-container").style.display = "block";
                 await populateReportsTable(details.report_hierarchy, givenEmployee, givenDate);
+                
+                // Now populate the filter dropdowns after all data is processed
+                populateFilterDropdowns();
             } else {
                 document.getElementById("report-container").style.display = "none";
             }
@@ -421,6 +680,48 @@
         }
     }
 
+    // Function to populate filter dropdowns
+    function populateFilterDropdowns() {
+        const departmentDropdown = document.getElementById("department-filter");
+        const teamDropdown = document.getElementById("team-filter");
+        const reportsToDropdown = document.getElementById("reports-to-filter");
+        
+        // Sort the values for better user experience
+        const sortedDepartments = Array.from(departments).sort();
+        const sortedTeams = Array.from(teams).sort();
+        const sortedManagers = Array.from(managers).sort();
+        
+        // Add departments to dropdown
+        sortedDepartments.forEach(department => {
+            if (department && department !== "-") {
+                const option = document.createElement("option");
+                option.value = department;
+                option.textContent = department;
+                departmentDropdown.appendChild(option);
+            }
+        });
+        
+        // Add teams to dropdown
+        sortedTeams.forEach(team => {
+            if (team && team !== "-") {
+                const option = document.createElement("option");
+                option.value = team;
+                option.textContent = team;
+                teamDropdown.appendChild(option);
+            }
+        });
+        
+        // Add managers to dropdown
+        sortedManagers.forEach(manager => {
+            if (manager && manager !== "-") {
+                const option = document.createElement("option");
+                option.value = manager;
+                option.textContent = manager;
+                reportsToDropdown.appendChild(option);
+            }
+        });
+    }
+
     async function populateReportsTable(reportHierarchy, employeeName, date) {
         const reportsTable = document.getElementById("reports-data");
         const dropdownOptions = document.getElementById("dropdown-options");
@@ -434,6 +735,19 @@
                 
                 for (const report of reportees) {
                     const reporteeDetails = report.reportee_attendance;  // Now directly from the hierarchy
+                    
+                    // Add to our filter sets
+                    if (reporteeDetails.department) departments.add(reporteeDetails.department);
+                    if (reporteeDetails.custom_team) teams.add(reporteeDetails.custom_team);
+                    if (reportsTo) managers.add(reportsTo);
+                    
+                    // Store employee data for filtering
+                    allEmployeeData.push({
+                        name: report.employee,
+                        reportsTo: reportsTo || "-",
+                        department: reporteeDetails.department || "-",
+                        team: reporteeDetails.custom_team || "-"
+                    });
                     
                     const li = document.createElement("li");
                     li.innerHTML = `<a class="dropdown-item text-uppercase" href="#" onclick="selectEmployee('${report.employee}')">${report.employee}</a>`;
@@ -449,8 +763,8 @@
                             <td>${reporteeDetails.first_checkin || "-"}</td>
                             <td>${reporteeDetails.last_logout || "-"}</td>
                             <td>${reporteeDetails.total_working_hours || "0:00:00"}</td>
-                            <td>${reporteeDetails.w_m_average.week_data.weekly_avg_hh_mm || "0.00"}</td>
-                            <td>${reporteeDetails.w_m_average.month_data.monthly_avg_hh_mm || "0.00"}</td>
+                            <td>${reporteeDetails.w_m_average.week_data.weekly_avg_hh_mm || "0.00"} <span style="font-size: 12px;">(out of ${reporteeDetails.w_m_average.week_data.days_considered || "0"} days)</span></td>
+                            <td>${reporteeDetails.w_m_average.month_data.monthly_avg_hh_mm || "0.00"} <span style="font-size: 12px;">(out of ${reporteeDetails.w_m_average.month_data.days_considered || "0"} days)</span></td>
                             <td><button class="btn btn-primary view-report" data-employee="${reporteeDetails.employee_name}" id="${buttonId}">More</button></td>
                         </tr>
                     `;
@@ -565,7 +879,7 @@
     function resetSearch() {
         selectedEmployeeName = "";
         document.getElementById("dropdown-search").value = "";
-        filterEmployees(); // Reset filtering
+        applyFilters(); // Apply all filters
     }
 </script>
 {% endblock %}
