@@ -5,6 +5,7 @@ import time
 from datetime import timedelta
 from collections import defaultdict
 
+
 # -------------------------------------------------------------------------
 # Cache implementation with TTL and manual invalidation
 # -------------------------------------------------------------------------
@@ -280,6 +281,16 @@ def get_attendance(employee_name, date):
     
     return cache_set(cache_key, result)
 
+@frappe.whitelist()
+def get_working_days_status(employee_name, date):
+    """Get working days status for an employee"""
+    cache_key = f"working_days_status:{employee_name}:{date}"
+    cached_data = cache_get(cache_key)
+    if cached_data:
+        return cached_data
+    
+    return cache_set(cache_key, get_working_days_status_api(employee_name, date))
+
 # -------------------------------------------------------------------------
 # Reporting Hierarchy Functions
 # -------------------------------------------------------------------------
@@ -357,6 +368,232 @@ def get_all_reportees_api(employee_name, current_date):
 # -------------------------------------------------------------------------
 # Average Calculation Functions
 # -------------------------------------------------------------------------
+
+def get_working_days_status_api(employee_name, current_date):
+    """Get working days status for an employee for the current month"""
+    current_date = getdate(current_date)
+    
+    # Get first and last day of current month
+    first_day_of_month = current_date.replace(day=1)
+    next_month = add_months(first_day_of_month, 1)
+    last_day_of_month = add_days(next_month, -1)
+
+    # Shared parameters
+    date_params = {
+        "employee_name": employee_name,
+        "first_day": str(first_day_of_month),
+        "last_day": str(last_day_of_month)
+    }
+    
+    # Get employee's holiday list
+    holiday_list = frappe.db.get_value("Employee", employee_name, "holiday_list") or ""
+
+    # Total working days (excluding holidays)
+    total_working_days_query = """
+        WITH RECURSIVE date_range AS (
+            SELECT %(first_day)s AS work_date
+            UNION ALL
+            SELECT DATE_ADD(work_date, INTERVAL 1 DAY)
+            FROM date_range
+            WHERE work_date < %(last_day)s
+        )
+        SELECT COUNT(*) AS total_working_days
+        FROM date_range dr
+        LEFT JOIN `tabHoliday` h ON dr.work_date = h.holiday_date AND h.parent = %(holiday_list)s
+        WHERE h.holiday_date IS NULL
+    """
+    total_working_days_result = frappe.db.sql(total_working_days_query, {
+        **date_params,
+        "holiday_list": holiday_list
+    }, as_dict=True)
+    total_working_days = total_working_days_result[0]["total_working_days"] if total_working_days_result else 0
+
+    # Days worked (distinct check-in dates)
+    days_worked_query = """
+        SELECT COUNT(DISTINCT DATE(`time`)) AS days_worked
+        FROM `tabEmployee Checkin`
+        WHERE `employee` = %(employee_name)s
+        AND DATE(`time`) BETWEEN %(first_day)s AND %(last_day)s
+    """
+    days_worked_result = frappe.db.sql(days_worked_query, date_params, as_dict=True)
+    days_worked = days_worked_result[0]["days_worked"] if days_worked_result else 0
+
+    # Reusable function for approved leave by type
+    def get_approved_leave(leave_type):
+        leave_query = """
+            SELECT COALESCE(SUM(total_leave_days), 0) AS approved_leave
+            FROM `tabLeave Application`
+            WHERE employee = %(employee_name)s
+            AND leave_type = %(leave_type)s
+            AND status = 'Approved'
+            AND docstatus = 1
+            AND (
+                (from_date BETWEEN %(first_day)s AND %(last_day)s)
+                OR (to_date BETWEEN %(first_day)s AND %(last_day)s)
+                OR (from_date <= %(first_day)s AND to_date >= %(last_day)s)
+            )
+        """
+        result = frappe.db.sql(leave_query, {**date_params, "leave_type": leave_type}, as_dict=True)
+        return result[0]["approved_leave"] if result else 0
+
+    approved_leave = get_approved_leave("Casual Leave")
+    approved_sick_leave = get_approved_leave("Sick Leave")
+    approved_compensatory_leave = get_approved_leave("Compensatory Leave")  # Fixed leave type from 'Sick Leave'
+    
+    # Return the result
+    result = {
+        "employee_name": employee_name,
+        "month": formatdate(first_day_of_month, "MMMM YYYY"),
+        "total_working_days": int(total_working_days),
+        "days_worked": int(days_worked),
+        "approved_leave": int(approved_leave),
+        "approved_sick_leave": int(approved_sick_leave),
+        "approved_compensatory_leave": int(approved_compensatory_leave),
+        "days_remaining": max(0, int(total_working_days) - int(days_worked) - int(approved_leave))
+    }
+    
+    return result
+
+
+def get_total_working_days(start_date, end_date, holiday_list):
+    """Calculate total working days (weekdays excluding holidays) in the given period"""
+    query = """
+    WITH RECURSIVE date_range AS (
+        SELECT %(start_date)s AS work_date
+        UNION ALL
+        SELECT DATE_ADD(work_date, INTERVAL 1 DAY)
+        FROM date_range
+        WHERE work_date < %(end_date)s
+    )
+    SELECT COUNT(*) AS total_working_days
+    FROM date_range dr
+    LEFT JOIN `tabHoliday` h ON dr.work_date = h.holiday_date AND h.parent = %(holiday_list)s
+    WHERE 
+        DAYOFWEEK(dr.work_date) NOT IN (1, 7)  -- Exclude Sundays (1) and Saturdays (7)
+        AND h.holiday_date IS NULL  -- Exclude holidays
+    """
+    
+    result = frappe.db.sql(query, {
+        "start_date": str(start_date),
+        "end_date": str(end_date),
+        "holiday_list": holiday_list or ""
+    }, as_dict=True)
+    
+    return result[0]["total_working_days"] if result else 0
+
+def get_days_worked(employee_name, start_date, end_date):
+    """Get count of days with check-ins for the employee in the given period"""
+    query = """
+    SELECT COUNT(DISTINCT DATE(`time`)) AS days_worked
+    FROM `tabEmployee Checkin`
+    WHERE employee = %(employee_name)s
+    AND DATE(`time`) BETWEEN %(start_date)s AND %(end_date)s
+    """
+    
+    result = frappe.db.sql(query, {
+        "employee_name": employee_name,
+        "start_date": str(start_date),
+        "end_date": str(end_date)
+    }, as_dict=True)
+    
+    return result[0]["days_worked"] if result else 0
+
+def get_available_leave(employee_name):
+    """Get total available leave balance for the employee"""
+    # Get current year
+    current_year = today()[:4]
+    
+    # Query to get leave allocation balance
+    query = """
+    SELECT 
+        COALESCE(SUM(
+            CASE 
+                WHEN la.carry_forward = 1 
+                THEN la.new_leaves_allocated + COALESCE(la.carry_forwarded_leaves_count, 0)
+                ELSE la.new_leaves_allocated
+            END
+        ), 0) as total_allocated,
+        COALESCE(SUM(COALESCE(la.leaves_taken, 0)), 0) as total_taken
+    FROM `tabLeave Allocation` la
+    WHERE la.employee = %(employee_name)s
+    AND la.docstatus = 1  -- Only approved allocations
+    AND YEAR(la.from_date) = %(current_year)s
+    """
+    
+    result = frappe.db.sql(query, {
+        "employee_name": employee_name,
+        "current_year": current_year
+    }, as_dict=True)
+    
+    if result:
+        total_allocated = result[0]["total_allocated"] or 0
+        total_taken = result[0]["total_taken"] or 0
+        return max(0, total_allocated - total_taken)  # Ensure non-negative
+    
+    return 0
+
+def get_approved_leave(employee_name, start_date, end_date):
+    """Get count of approved leave days for the employee in the given period"""
+    query = """
+    SELECT COALESCE(SUM(la.total_leave_days), 0) as approved_leave_days
+    FROM `tabLeave Application` la
+    WHERE la.employee = %(employee_name)s
+    AND la.docstatus = 1  -- Only approved leave applications
+    AND la.status = 'Approved'
+    AND (
+        (la.from_date BETWEEN %(start_date)s AND %(end_date)s) OR
+        (la.to_date BETWEEN %(start_date)s AND %(end_date)s) OR
+        (la.from_date <= %(start_date)s AND la.to_date >= %(end_date)s)
+    )
+    """
+    
+    result = frappe.db.sql(query, {
+        "employee_name": employee_name,
+        "start_date": str(start_date),
+        "end_date": str(end_date)
+    }, as_dict=True)
+    
+    return result[0]["approved_leave_days"] if result else 0
+
+
+# Get the count of expected working days without check-ins
+def get_expected_workdays_without_checkins(employee_name, start_date, end_date, holiday_list, exclude_date):
+    """Returns the count of expected working days without check-ins or valid leave"""
+    query = """
+    WITH RECURSIVE date_range AS (
+        SELECT %(start_date)s AS work_date
+        UNION ALL
+        SELECT DATE_ADD(work_date, INTERVAL 1 DAY)
+        FROM date_range
+        WHERE work_date < %(end_date)s
+    ),
+    checkins AS (
+        SELECT DISTINCT DATE(`time`) AS checkin_date
+        FROM `tabEmployee Checkin`
+        WHERE employee = %(employee_name)s
+          AND DATE(`time`) BETWEEN %(start_date)s AND %(end_date)s
+    )
+    SELECT COUNT(*) AS expected_days_count
+    FROM date_range dr
+    LEFT JOIN `tabHoliday` h ON dr.work_date = h.holiday_date AND h.parent = %(holiday_list)s
+    LEFT JOIN `tabAttendance` att ON dr.work_date = att.attendance_date AND att.employee = %(employee_name)s
+    LEFT JOIN checkins c ON c.checkin_date = dr.work_date
+    WHERE 
+        DAYOFWEEK(dr.work_date) NOT IN (1, 7)
+        AND h.holiday_date IS NULL
+        AND (att.status IS NULL OR att.status NOT IN ('On Leave', 'Half Day', 'Work From Home'))
+        AND c.checkin_date IS NULL
+    """
+    result = frappe.db.sql(query, {
+        "employee_name": employee_name,
+        "start_date": str(start_date),
+        "end_date": str(end_date),
+        "holiday_list": holiday_list,
+        "exclude_date": str(exclude_date)
+    }, as_dict=True)
+
+    return result[0]["expected_days_count"] if result else 0
+
 def get_w_m_average(employee_name, current_date):
     """Get weekly and monthly averages"""
     cache_key = f"w_m_average:{employee_name}:{current_date}"
@@ -372,88 +609,81 @@ def get_w_m_average(employee_name, current_date):
     return cache_set(cache_key, result)
 
 def get_weekly_average(employee_name, current_date):
-    """Calculate weekly average working hours"""
+    """Calculate weekly average working hours including expected non-checkin days"""
     cache_key = f"weekly_avg:{employee_name}:{current_date}"
     cached_data = cache_get(cache_key)
     if cached_data:
         return cached_data
-        
+
     current_date = getdate(current_date)
-    
-    # Get the start of the week (Monday)
     week_start = add_days(current_date, -current_date.weekday())
-    
-    # Get all check-ins/check-outs for the week in one query
+
+    # ✅ Query check-in records
     query = """
         SELECT DATE(`time`) as work_date, `log_type`, `time`
         FROM `tabEmployee Checkin`
         WHERE `employee` = %s
-        AND DATE(`time`) >= %s
-        AND DATE(`time`) <= %s
+        AND DATE(`time`) BETWEEN %s AND %s
         ORDER BY `time` ASC
     """
-    
-    week_records = frappe.db.sql(
-        query, 
-        (
-            employee_name, 
-            week_start,
-            current_date
-        ), 
-        as_dict=True
+    week_records = frappe.db.sql(query, (employee_name, week_start, current_date), as_dict=True)
+
+    # ✅ RECURSIVE query for expected workdays without check-ins
+    holiday_list = frappe.db.get_value("Employee", employee_name, "holiday_list")
+    current_date_str = str(current_date)
+
+
+    # expected workdays without check-ins
+    extra_days = get_expected_workdays_without_checkins(
+        employee_name, week_start, current_date, holiday_list, current_date_str
     )
-    
-    # Group records by date
+
+    # ✅ Process check-ins into working hours
     daily_records = {}
     for record in week_records:
         date_str = str(record["work_date"])
         if date_str not in daily_records:
             daily_records[date_str] = []
         daily_records[date_str].append(record)
-    
-    # Calculate working hours for each day
+
     total_seconds = 0
     valid_days = 0
-    
+
     for date_str, records in daily_records.items():
         if date_str == str(current_date):
-            continue  # Skip current day
-            
-        # Calculate working hours for this day
+            continue
         day_seconds = 0
         current_session = {}
-        
+
         for record in records:
             log_type = record["log_type"]
             log_time = record["time"]
-            
             if log_type == "IN":
                 current_session["in_time"] = log_time
             elif log_type == "OUT" and "in_time" in current_session:
                 working_seconds = (log_time - current_session["in_time"]).total_seconds()
                 day_seconds += working_seconds
                 current_session = {}
-        
+
         if day_seconds > 0:
             total_seconds += day_seconds
             valid_days += 1
-    
-    # Calculate average
-    if valid_days == 0:
+
+    total_considered_days = valid_days + extra_days
+
+    if total_considered_days == 0:
         result = {"weekly_avg_hh_mm": "0.00", "days_considered": 0}
     else:
-        avg_seconds = total_seconds // valid_days
+        avg_seconds = total_seconds // total_considered_days
         avg_hours = int(avg_seconds // 3600)
         avg_minutes = int((avg_seconds % 3600) // 60)
-        
-        # Format output
         avg_hh_mm = f"{avg_hours}.{str(avg_minutes).zfill(2)}"
-        
         result = {
             "weekly_avg_hh_mm": avg_hh_mm,
-            "days_considered": valid_days
+            "days_considered": total_considered_days,
+            "extra_days": extra_days
         }
-    
+
     return cache_set(cache_key, result)
 
 def get_monthly_average(employee_name, current_date):
@@ -467,6 +697,9 @@ def get_monthly_average(employee_name, current_date):
     
     # Get the first day of the current month
     first_day_of_current_month = current_date.replace(day=1)
+
+    # Get the first day of the next month
+    first_day_of_next_month = add_months(current_date.replace(day=1), 1)
     
     # Get all check-ins/check-outs for the month in one query
     query = """
@@ -474,7 +707,7 @@ def get_monthly_average(employee_name, current_date):
         FROM `tabEmployee Checkin`
         WHERE `employee` = %s
         AND DATE(`time`) >= %s
-        AND DATE(`time`) <= %s
+        AND DATE(`time`) < %s
         ORDER BY `time` ASC
     """
     
@@ -483,9 +716,18 @@ def get_monthly_average(employee_name, current_date):
         (
             employee_name, 
             first_day_of_current_month,
-            current_date
+            first_day_of_next_month
         ), 
         as_dict=True
+    )
+
+     # ✅ RECURSIVE query for expected workdays without check-ins
+    holiday_list = frappe.db.get_value("Employee", employee_name, "holiday_list")
+    current_date_str = str(current_date)
+    
+    # expected workdays without check-ins
+    extra_days = get_expected_workdays_without_checkins(
+        employee_name, first_day_of_current_month, first_day_of_next_month, holiday_list, current_date_str
     )
     
     # Group records by date
@@ -501,8 +743,8 @@ def get_monthly_average(employee_name, current_date):
     valid_days = 0
     
     for date_str, records in daily_records.items():
-        if date_str == str(current_date):
-            continue  # Skip current day
+        # if date_str == str(current_date):
+        #     continue  # Skip current day
             
         # Calculate working hours for this day
         day_seconds = 0
@@ -524,14 +766,17 @@ def get_monthly_average(employee_name, current_date):
             valid_days += 1
     
     # Calculate average
-    if valid_days == 0:
+    # if valid_days == 0:
+    total_considered_days = valid_days + extra_days
+
+    if total_considered_days == 0:
         result = {
             "monthly_avg_hh_mm": "0.00", 
             "days_considered": 0,
             "month": formatdate(first_day_of_current_month, "MMMM YYYY")
         }
     else:
-        avg_seconds = total_seconds // valid_days
+        avg_seconds = total_seconds // total_considered_days 
         avg_hours = int(avg_seconds // 3600)
         avg_minutes = int((avg_seconds % 3600) // 60)
         
@@ -541,6 +786,7 @@ def get_monthly_average(employee_name, current_date):
         result = {
             "monthly_avg_hh_mm": avg_hh_mm,
             "days_considered": valid_days,
+            "extra_days": extra_days,
             "month": formatdate(first_day_of_current_month, "MMMM YYYY")
         }
     
